@@ -23,6 +23,9 @@ class InboxViewModel(
     private val _expandedEmailId = MutableStateFlow<Long?>(null)
     val expandedEmailId = _expandedEmailId.asStateFlow()
 
+    private val _isDrafting = MutableStateFlow(false)
+    val isDrafting = _isDrafting.asStateFlow()
+
     /**
      * Cohesive flow combination merging the repository stream, search query, and expansion state.
      * Whenever any source emits, we reconstruct a new, immutable InboxUiState.
@@ -31,8 +34,9 @@ class InboxViewModel(
     val uiState: StateFlow<InboxUiState> = combine(
         repository.getEmails(),
         _searchQuery,
-        _expandedEmailId
-    ) { emails, query, expandedId ->
+        _expandedEmailId,
+        _isDrafting
+    ) { emails, query, expandedId, isDrafting ->
         val filteredEmails = if (query.isBlank()) {
             emails
         } else {
@@ -47,7 +51,8 @@ class InboxViewModel(
             emails = filteredEmails,
             searchQuery = query,
             expandedEmailId = expandedId,
-            isLoading = false
+            isLoading = false,
+            isDrafting = isDrafting
         )
     }.stateIn(
         scope = viewModelScope,
@@ -89,6 +94,21 @@ class InboxViewModel(
     fun onLoadMore() {
         viewModelScope.launch {
             repository.loadMore()
+        }
+    }
+
+    fun onStartDrafting() {
+        _isDrafting.value = true
+    }
+
+    fun onCancelDrafting() {
+        _isDrafting.value = false
+    }
+
+    fun onSendEmail(subject: String, body: String) {
+        viewModelScope.launch {
+            repository.sendEmail("Me", subject, body)
+            _isDrafting.value = false
         }
     }
 

@@ -6,9 +6,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.data.repository.FakeEmailRepository
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.ui.screen.ComposeScreen
 import com.example.ui.screen.InboxScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.InboxViewModel
@@ -29,10 +34,29 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
+                val navController = rememberNavController()
+                
                 Surface(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
                 ) {
-                    InboxScreen(viewModel = inboxViewModel)
+                    NavHost(navController = navController, startDestination = "inbox") {
+                        composable("inbox") {
+                            InboxScreen(
+                                viewModel = inboxViewModel,
+                                onComposeClick = { navController.navigate("compose") }
+                            )
+                        }
+                        composable("compose") {
+                            ComposeScreen(
+                                onBack = { navController.popBackStack() },
+                                onSend = { subject, body ->
+                                    inboxViewModel.onSendEmail(subject, body)
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }

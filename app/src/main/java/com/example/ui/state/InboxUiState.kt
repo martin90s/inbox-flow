@@ -10,7 +10,8 @@ data class InboxUiState(
     val emails: List<EmailItem> = emptyList(),
     val searchQuery: String = "",
     val expandedEmailId: Long? = null,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val isDrafting: Boolean = false
 ) {
     val isEmpty: Boolean get() = !isLoading && emails.isEmpty()
 }

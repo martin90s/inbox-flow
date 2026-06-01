@@ -81,4 +81,20 @@ class FakeEmailRepository : EmailRepository {
             }
         }
     }
+
+    override suspend fun sendEmail(sender: String, subject: String, body: String) {
+        _emailsFlow.update { currentEmails ->
+            val newEmail = EmailItem(
+                id = (currentEmails.maxOfOrNull { it.id } ?: 0L) + 1,
+                sender = sender,
+                senderEmail = "me@example.com",
+                subject = subject,
+                body = body,
+                timestamp = "Just now",
+                isRead = true,
+                isStarred = false
+            )
+            listOf(newEmail) + currentEmails
+        }
+    }
 }

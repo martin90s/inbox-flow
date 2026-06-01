@@ -25,4 +25,9 @@ interface EmailRepository {
      * Loads the next page of emails.
      */
     suspend fun loadMore()
+
+    /**
+     * Adds a new email to the repository.
+     */
+    suspend fun sendEmail(sender: String, subject: String, body: String)
 }

@@ -8,6 +8,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,12 +38,17 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Drafts
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MarkEmailUnread
+import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -54,6 +60,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -63,7 +70,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,10 +94,22 @@ import kotlin.math.absoluteValue
 @Composable
 fun InboxScreen(
     viewModel: InboxViewModel,
+    onComposeClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Collecting single unified UI state using modern lifecycle collection stream
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    
+    // 1. 创建共享的列表状态
+    val listState = rememberLazyListState()
+    
+    // 优化 1：使用 remember 缓存所有 Lambda 回调，确保 EmailList 的参数引用保持不变
+    // 这样 EmailList 就有更高的几率触发 Skip（跳过重组）
+    val onEmailClicked = remember { { id: Long -> viewModel.onEmailClicked(id) } }
+    val onToggleStarClicked = remember { { id: Long -> viewModel.onToggleStarClicked(id) } }
+    val onToggleReadStatus = remember { { id: Long, isRead: Boolean -> viewModel.onMarkAsReadClicked(id, isRead) } }
+    val onLoadMore = remember { { viewModel.onLoadMore() } }
+    val onQueryChanged = remember { { q: String -> viewModel.onSearchQueryChanged(q) } }
 
     Scaffold(
         modifier = modifier
@@ -101,10 +122,13 @@ fun InboxScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // 1. Sleek Search Bar (styled similar to Gmail's floating header)
+            // 优化 2：将 listState 直接传给 SearchBanner，内部去计算 isScrolled
+            // 这样当滚动状态变化时，只有 SearchBanner 会重组，InboxScreen 和 EmailList 都不会动
             SearchBanner(
                 query = uiState.searchQuery,
-                onQueryChanged = { viewModel.onSearchQueryChanged(it) }
+                onQueryChanged = onQueryChanged,
+                onStartDrafting = onComposeClick,
+                listState = listState
             )
 
             // 2. Email list viewport
@@ -116,13 +140,12 @@ fun InboxScreen(
                 val emailListState = remember(uiState.emails) { EmailListState(uiState.emails) }
                 EmailList(
                     state = emailListState,
+                    listState = listState,
                     expandedEmailId = uiState.expandedEmailId,
-                    onEmailClicked = { viewModel.onEmailClicked(it) },
-                    onToggleStarClicked = { viewModel.onToggleStarClicked(it) },
-                    onToggleReadClicked = { id, isRead ->
-                        viewModel.onMarkAsReadClicked(id, isRead)
-                    },
-                    onLoadMore = { viewModel.onLoadMore() }
+                    onEmailClicked = onEmailClicked,
+                    onToggleStarClicked = onToggleStarClicked,
+                    onToggleReadStatus = onToggleReadStatus,
+                    onLoadMore = onLoadMore
                 )
             }
         }
@@ -134,8 +157,28 @@ fun InboxScreen(
 fun SearchBanner(
     query: String,
     onQueryChanged: (String) -> Unit,
+    onStartDrafting: () -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState, // 接收 state 而不是 boolean
     modifier: Modifier = Modifier
 ) {
+    // 将计算逻辑移入内部。现在只有这个组件会响应滚动状态的变化
+    val isScrolled by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+        }
+    }
+
+    // 根据滚动状态动态调整海拔和背景色
+    val elevation by animateDpAsState(
+        targetValue = if (isScrolled) 8.dp else 2.dp,
+        label = "elevation"
+    )
+    val containerColor = if (isScrolled) {
+        MaterialTheme.colorScheme.surface
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -144,9 +187,9 @@ fun SearchBanner(
             .testTag("search_bar_card"),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = containerColor
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation)
     ) {
         Row(
             modifier = Modifier
@@ -213,6 +256,102 @@ fun SearchBanner(
                     }
                 }
             )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            IconButton(
+                onClick = onStartDrafting,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Compose email",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ComposeEmailDialog(
+    onDismiss: () -> Unit,
+    onSend: (String, String) -> Unit
+) {
+    var subject by remember { mutableStateOf("") }
+    var body by remember { mutableStateOf("") }
+
+    BasicAlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth()
+            ) {
+                Text(
+                    text = "New Message",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TextField(
+                    value = subject,
+                    onValueChange = { subject = it },
+                    placeholder = { Text("Subject") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextField(
+                    value = body,
+                    onValueChange = { body = it },
+                    placeholder = { Text("Compose email") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { onSend(subject, body) },
+                        enabled = subject.isNotBlank() || body.isNotBlank()
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Send")
+                    }
+                }
+            }
         }
     }
 }
@@ -226,14 +365,15 @@ data class EmailListState(
 @Composable
 fun EmailList(
     state: EmailListState,
+    listState: androidx.compose.foundation.lazy.LazyListState, // 接收传入的 state
     expandedEmailId: Long?,
     onEmailClicked: (Long) -> Unit,
     onToggleStarClicked: (Long) -> Unit,
-    onToggleReadClicked: (Long, Boolean) -> Unit,
+    onToggleReadStatus: (Long, Boolean) -> Unit, // 注意参数名对齐
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val listState = rememberLazyListState()
+    // 移除内部创建的 listState
 
     // INTERVIEW ANTI-PATTERN: Reading scroll state directly in the Composable body.
     // This causes the entire EmailList (and all its children) to recompose on EVERY pixel scrolled.
@@ -273,7 +413,7 @@ fun EmailList(
                 isExpanded = isExpanded,
                 onClick = { onEmailClicked(email.id) },
                 onToggleStar = { onToggleStarClicked(email.id) },
-                onToggleReadStatus = { onToggleReadClicked(email.id, !email.isRead) }
+                onToggleReadStatus = { onToggleReadStatus(email.id, !email.isRead) }
             )
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
@@ -558,22 +698,20 @@ fun AvatarView(
     isUnread: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // OPTIMIZATION: Use 'remember' to avoid expensive re-calculations and allocations
+    // 优化：直接获取首字母，避免 100 次循环计算
     val initial = remember(senderName) {
-        (0..100).map { senderName.firstOrNull()?.uppercaseChar() ?: '?' }.last().toString()
+        senderName.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
     }
     
+    // 优化：使用简单的哈希算法从预定义列表中选色，避免每次重组都生成 500 个颜色对象
     val avatarColor = remember(senderName) {
-        val colors = (0..500).map { i ->
-            Color(
-                red = (i % 255) / 255f,
-                green = ((i * 2) % 255) / 255f,
-                blue = ((i * 3) % 255) / 255f,
-                alpha = 1f
-            )
-        }
-        val colorCode = senderName.hashCode().absoluteValue
-        colors[colorCode % colors.size]
+        val colors = listOf(
+            Color(0xFFEF5350), Color(0xFFEC407A), Color(0xFFAB47BC),
+            Color(0xFF7E57C2), Color(0xFF5C6BC0), Color(0xFF42A5F5),
+            Color(0xFF26A69A), Color(0xFF66BB6A), Color(0xFFFFA726)
+        )
+        val index = (senderName.hashCode().absoluteValue) % colors.size
+        colors[index]
     }
 
     Box(
