@@ -1,0 +1,6 @@
+{
+  "name": "Inbox Flow",
+  "description": "A clean, interview-focused Gmail clone designed to demonstrate state-reactive list searching, expansion, and MVVM architecture using Flow/StateFlow and Jetpack Compose.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
