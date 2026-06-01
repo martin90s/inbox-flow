@@ -245,7 +245,7 @@ fun EmailList(
             val layoutInfo = listState.layoutInfo
             val totalItemsCount = layoutInfo.totalItemsCount
             val lastVisibleItemIndex = (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) + 1
-            
+
             // Load more when 3 items from the bottom
             lastVisibleItemIndex > 0 && lastVisibleItemIndex >= totalItemsCount - 3
         }

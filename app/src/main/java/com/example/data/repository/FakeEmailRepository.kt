@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class FakeEmailRepository : EmailRepository {
     private val mutex = Mutex()
@@ -68,7 +70,7 @@ class FakeEmailRepository : EmailRepository {
         }
     }
 
-    override suspend fun loadMore() {
+    override suspend fun loadMore() = withContext(Dispatchers.IO) {
         mutex.withLock {
             val nextItems = allMails.take((currentPage + 1) * pageSize)
             if (nextItems.size > _emailsFlow.value.size) {
