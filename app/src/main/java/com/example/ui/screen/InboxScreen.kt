@@ -114,7 +114,7 @@ fun InboxScreen(
                 EmptyStateView(query = uiState.searchQuery)
             } else {
                 EmailList(
-                    state = EmailListState(uiState.emails),
+                    emails = uiState.emails,
                     expandedEmailId = uiState.expandedEmailId,
                     onEmailClicked = { viewModel.onEmailClicked(it) },
                     onToggleStarClicked = { viewModel.onToggleStarClicked(it) },
@@ -216,14 +216,9 @@ fun SearchBanner(
     }
 }
 
-@Immutable
-data class EmailListState(
-    val emails: List<EmailItem>
-)
-
 @Composable
 fun EmailList(
-    state: EmailListState,
+    emails: List<EmailItem>,
     expandedEmailId: Long?,
     onEmailClicked: (Long) -> Unit,
     onToggleStarClicked: (Long) -> Unit,
@@ -232,6 +227,10 @@ fun EmailList(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+
+    // INTERVIEW ANTI-PATTERN: Reading scroll state directly in the Composable body.
+    // This causes the entire EmailList (and all its children) to recompose on EVERY pixel scrolled.
+    val scrollOffset = listState.firstVisibleItemScrollOffset 
 
     // Detect when we are near the end of the list
     val shouldLoadMore by remember {
@@ -258,8 +257,7 @@ fun EmailList(
             .testTag("email_lazy_column")
     ) {
         items(
-            items = state.emails,
-            key = { it.id }
+            items = emails
         ) { email ->
             val isExpanded = email.id == expandedEmailId
             EmailRowItem(
@@ -302,6 +300,10 @@ fun EmailRowItem(
     onToggleReadStatus: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // INTERVIEW ANTI-PATTERN: Heavy calculation inside a Composable without 'remember'
+    // This will run on every single recomposition, causing scroll jank.
+    val heavyCalculation = (0..20000).map { it.toString().reversed().toIntOrNull() ?: it }.sorted().sum()
+
     // Smoothen list cell expansion transitions using animateColorAsState
     val backgroundColor by animateColorAsState(
         targetValue = if (isExpanded) {
@@ -552,17 +554,20 @@ fun AvatarView(
     isUnread: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Generate an beautiful color derived from sender name hash to keep them stable and organic
-    val initial = senderName.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-    val colorCode = senderName.hashCode().absoluteValue
-    val avatarColor = remember(senderName) {
-        val colors = listOf(
-            Color(0xFFE57373), Color(0xFFF06292), Color(0xFFBA68C8), Color(0xFF9575CD),
-            Color(0xFF7986CB), Color(0xFF64B5F6), Color(0xFF4FC3F7), Color(0xFF4DB6AC),
-            Color(0xFF81C784), Color(0xFFAED581), Color(0xFFFFD54F), Color(0xFFFFB74D)
+    // INTERVIEW ANTI-PATTERN: Re-calculating stable values without 'remember'
+    val initial = (0..100).map { senderName.firstOrNull()?.uppercaseChar() ?: '?' }.last().toString()
+    
+    // Simulating a "Heavy" color picker with memory allocation
+    val colors = (0..500).map { i ->
+        Color(
+            red = (i % 255) / 255f,
+            green = ((i * 2) % 255) / 255f,
+            blue = ((i * 3) % 255) / 255f,
+            alpha = 1f
         )
-        colors[colorCode % colors.size]
     }
+    val colorCode = senderName.hashCode().absoluteValue
+    val avatarColor = colors[colorCode % colors.size]
 
     Box(
         modifier = modifier

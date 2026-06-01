@@ -1,8 +1,5 @@
 package com.example.data.model
 
-import androidx.compose.runtime.Immutable
-
-@Immutable
 data class EmailItem(
     val id: Long,
     val sender: String,
