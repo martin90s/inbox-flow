@@ -308,11 +308,6 @@ fun EmailRowItem(
     onToggleReadStatus: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // OPTIMIZATION: Calculations should be remembered
-    val heavyCalculation = remember(email.id) {
-        (0..20000).map { it.toString().reversed().toIntOrNull() ?: it }.sorted().sum()
-    }
-
     // Smoothen list cell expansion transitions using animateColorAsState
     val backgroundColor by animateColorAsState(
         targetValue = if (isExpanded) {
