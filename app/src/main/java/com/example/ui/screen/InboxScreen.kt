@@ -85,10 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.EmailItem
-import com.example.ui.state.InboxUiState
 import com.example.ui.viewmodel.InboxViewModel
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import kotlin.math.absoluteValue
 
 @Composable
@@ -272,90 +269,6 @@ fun SearchBanner(
         }
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ComposeEmailDialog(
-    onDismiss: () -> Unit,
-    onSend: (String, String) -> Unit
-) {
-    var subject by remember { mutableStateOf("") }
-    var body by remember { mutableStateOf("") }
-
-    BasicAlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(24.dp)
-    ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth()
-            ) {
-                Text(
-                    text = "New Message",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                TextField(
-                    value = subject,
-                    onValueChange = { subject = it },
-                    placeholder = { Text("Subject") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextField(
-                    value = body,
-                    onValueChange = { body = it },
-                    placeholder = { Text("Compose email") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    OutlinedButton(onClick = onDismiss) {
-                        Text("Cancel")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = { onSend(subject, body) },
-                        enabled = subject.isNotBlank() || body.isNotBlank()
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Send")
-                    }
-                }
-            }
-        }
-    }
-}
-
 
 @Immutable
 data class EmailListState(
